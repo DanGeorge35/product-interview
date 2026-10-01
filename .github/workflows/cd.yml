@@ -7,8 +7,12 @@ on:
 env:
   DOTNET_VERSION: "8.0.x"
   NODE_VERSION: "22.x"
-  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}         # e.g. products-api
+  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}             # e.g. products-api
   AZURE_STATICWEBAPP_NAME: ${{ vars.AZURE_STATICWEBAPP_NAME }} # e.g. products-ui
+
+permissions:
+  contents: read
+  id-token: write  # required for Azure OIDC login
 
 jobs:
   # ── Guard: must pass CI first ────────────────────────────────────────────────
@@ -55,6 +59,7 @@ jobs:
         run: |
           dotnet restore ProductService.sln
           dotnet publish backend/ProductService.API/ProductService.API.csproj \
+            --no-restore \
             --configuration Release \
             --output ./publish
 
@@ -65,7 +70,7 @@ jobs:
 
       - name: Run EF Core migrations
         run: |
-          dotnet tool install --global dotnet-ef
+          dotnet tool install --global dotnet-ef --version 8.*
           dotnet ef database update \
             --project backend/ProductService.Infrastructure/ProductService.Infrastructure.csproj \
             --startup-project backend/ProductService.API/ProductService.API.csproj \
@@ -121,3 +126,4 @@ jobs:
           action: upload
           app_location: frontend
           output_location: dist
+          skip_app_build: true

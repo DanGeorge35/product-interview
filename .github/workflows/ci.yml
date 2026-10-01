@@ -10,6 +10,11 @@ env:
   DOTNET_VERSION: "8.0.x"
   NODE_VERSION: "22.x"
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 jobs:
   # ── Backend ──────────────────────────────────────────────────────────────────
   backend:
@@ -49,7 +54,7 @@ jobs:
             --results-directory ./test-results
 
       - name: Publish test results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v2
         if: always()
         with:
           name: .NET Test Results
@@ -57,7 +62,7 @@ jobs:
           reporter: dotnet-trx
 
       - name: Upload coverage report
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: always()
         with:
           files: test-results/**/coverage.cobertura.xml

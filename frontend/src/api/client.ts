@@ -1,9 +1,9 @@
-import axios from 'axios';
-import { useAuthStore } from '../store/authStore';
+import axios from "axios";
+import { useAuthStore } from "../store/authStore";
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api',
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:5197/api",
+  headers: { "Content-Type": "application/json" },
 });
 
 apiClient.interceptors.request.use((config) => {
@@ -21,7 +21,7 @@ apiClient.interceptors.response.use(
       useAuthStore.getState().logout();
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default apiClient;
