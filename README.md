@@ -21,6 +21,58 @@ ProductService/
 └── ProductService.sln
 ```
 
+### In a wider event-driven system
+
+This repository contains only the Products service. The diagram below shows how it could sit alongside other services (Orders, Payments and Notifications are illustrative and not part of this repo). Each service owns its own database and they communicate asynchronously through Azure Service Bus rather than calling each other directly.
+
+```mermaid
+flowchart LR
+    client["React frontend"]
+    gateway["API gateway<br/>(routing, JWT validation)"]
+
+    subgraph products["Products service (this repo)"]
+        productsApi["Products API"]
+        productsDb[("Products DB")]
+        productsApi --> productsDb
+    end
+
+    subgraph orders["Orders service"]
+        ordersApi["Orders API"]
+        ordersDb[("Orders DB")]
+        ordersApi --> ordersDb
+    end
+
+    subgraph payments["Payments service"]
+        paymentsApi["Payments API"]
+        paymentsDb[("Payments DB")]
+        paymentsApi --> paymentsDb
+    end
+
+    notifications["Notifications service"]
+    bus{{"Azure Service Bus<br/>(topics and subscriptions)"}}
+
+    client -->|HTTPS| gateway
+    gateway --> productsApi
+    gateway --> ordersApi
+    gateway --> paymentsApi
+
+    productsApi -. "publishes ProductCreated" .-> bus
+    ordersApi -. "publishes OrderPlaced" .-> bus
+    paymentsApi -. "publishes PaymentCompleted / PaymentFailed" .-> bus
+
+    bus -. "ProductCreated" .-> ordersApi
+    bus -. "OrderPlaced" .-> paymentsApi
+    bus -. "PaymentCompleted / PaymentFailed" .-> ordersApi
+    bus -. "OrderPlaced, PaymentCompleted" .-> notifications
+```
+
+Solid arrows are synchronous HTTP calls; dotted arrows are asynchronous events.
+
+- **Products** publishes `ProductCreated` when a product is saved (the `ProductCreatedDomainEvent` already raised by this service).
+- **Orders** subscribes to `ProductCreated` to keep its own read-only copy of product data, so it can accept orders without calling Products. It publishes `OrderPlaced`.
+- **Payments** reacts to `OrderPlaced`, takes payment, and publishes `PaymentCompleted` or `PaymentFailed`, which Orders uses to confirm or cancel the order.
+- **Notifications** listens to order and payment events to email the customer; it can be added or removed without changing any publisher.
+
 ## API Endpoints
 
 | Method | Path | Auth | Description |
