@@ -1,0 +1,123 @@
+name: CD
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  NODE_VERSION: "22.x"
+  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}         # e.g. products-api
+  AZURE_STATICWEBAPP_NAME: ${{ vars.AZURE_STATICWEBAPP_NAME }} # e.g. products-ui
+
+jobs:
+  # ── Guard: must pass CI first ────────────────────────────────────────────────
+  ci-check:
+    name: Verify CI passed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore & Build
+        run: |
+          dotnet restore ProductService.sln
+          dotnet build ProductService.sln --no-restore --configuration Release
+
+      - name: Run all tests
+        run: |
+          dotnet test ProductService.sln \
+            --no-build \
+            --configuration Release
+
+  # ── Deploy API to Azure App Service ─────────────────────────────────────────
+  deploy-api:
+    name: Deploy API → Azure App Service
+    runs-on: ubuntu-latest
+    needs: ci-check
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore & Publish
+        run: |
+          dotnet restore ProductService.sln
+          dotnet publish backend/ProductService.API/ProductService.API.csproj \
+            --configuration Release \
+            --output ./publish
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Run EF Core migrations
+        run: |
+          dotnet tool install --global dotnet-ef
+          dotnet ef database update \
+            --project backend/ProductService.Infrastructure/ProductService.Infrastructure.csproj \
+            --startup-project backend/ProductService.API/ProductService.API.csproj \
+            --configuration Release
+        env:
+          ConnectionStrings__DefaultConnection: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: ./publish
+
+  # ── Deploy Frontend to Azure Static Web Apps ────────────────────────────────
+  deploy-frontend:
+    name: Deploy Frontend → Azure Static Web Apps
+    runs-on: ubuntu-latest
+    needs: ci-check
+    environment: production
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install & Build
+        run: |
+          npm ci
+          npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Static Web Apps
+        uses: azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: frontend
+          output_location: dist
