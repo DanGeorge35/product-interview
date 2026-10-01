@@ -12,7 +12,9 @@ const schema = z.object({
   stockQuantity: z.coerce.number().int().min(0, 'Stock cannot be negative'),
 });
 
-type FormValues = z.infer<typeof schema>;
+// z.coerce fields accept unknown input, so the form's input and output types differ.
+type FormInput = z.input<typeof schema>;
+type FormValues = z.output<typeof schema>;
 
 interface Props {
   onSuccess?: () => void;
@@ -21,7 +23,7 @@ interface Props {
 export default function CreateProductForm({ onSuccess }: Props) {
   const { mutate, isPending, isError, error, isSuccess, reset } = useCreateProduct();
 
-  const { register, handleSubmit, reset: resetForm, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, reset: resetForm, formState: { errors } } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { stockQuantity: 0 },
   });
