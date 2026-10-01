@@ -13,13 +13,14 @@ COPY ["backend/ProductService.Infrastructure/ProductService.Infrastructure.cspro
 RUN dotnet restore "backend/ProductService.API/ProductService.API.csproj"
 
 COPY . .
-WORKDIR "/src/backend/ProductService.API"
-RUN dotnet build "ProductService.API.csproj" -c Release -o /app/build
 
-FROM build AS publish
-RUN dotnet publish "ProductService.API.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "backend/ProductService.API/ProductService.API.csproj" \
+    --no-restore \
+    -c Release \
+    -o /app/publish \
+    /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "ProductService.API.dll"]
